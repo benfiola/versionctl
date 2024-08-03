@@ -36,7 +36,7 @@ Currently, binaries are produced for the following platforms:
 Installation is as simple as downloading the binary, making it executable and using it:
 
 ```shell
-$ os="linux" arch="arm64" && curl -fsSL -o versionctl "https://github.com/benfiola/releases/latest/versionctl-${os}-${arch}"
+$ os="linux" arch="arm64" && curl -fsSL -o versionctl "https://github.com/benfiola/versionctl/releases/latest/download/versionctl-${os}-${arch}"
 $ chmod +x versionctl
 $ ./versionctl version
 0.0.0
