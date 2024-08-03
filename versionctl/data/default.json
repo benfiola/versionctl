@@ -1,0 +1,24 @@
+{
+  "breakingChangeTags": ["BREAKING CHANGE:"],
+  "rules": [
+    { "branch": "main" },
+    { "branch": "dev", "prereleaseToken": "rc" },
+    {
+      "branch": "^(?P<branch>.*)$",
+      "prereleaseToken": "alpha",
+      "buildMetadata": "{branch}"
+    }
+  ],
+  "tags": {
+    "build:": "patch",
+    "chore:": "patch",
+    "ci:": "patch",
+    "docs:": "patch",
+    "feat:": "minor",
+    "fix:": "patch",
+    "perf:": "patch",
+    "style:": "patch",
+    "refactor:": "minor",
+    "test:": "patch"
+  }
+}
