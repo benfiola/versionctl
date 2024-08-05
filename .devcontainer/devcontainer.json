@@ -3,9 +3,8 @@
     "vscode": {
       "extensions": [
         "esbenp.prettier-vscode",
-        "rohit-gohri.format-code-action",
-        "ms-python.black-formatter",
-        "ms-python.isort"
+        "golang.go",
+        "rohit-gohri.format-code-action"
       ],
       "settings": {
         "editor.codeActionsOnSave": [
@@ -13,38 +12,21 @@
           "source.formatDocument"
         ],
         "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "[python]": {
-          "editor.defaultFormatter": "ms-python.black-formatter"
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
         },
-        "isort.args": ["--profile", "black"],
-        "python.defaultInterpreterPath": "/venv/bin/python",
         "launch": {
           "version": "0.2.0",
-          "configurations": [
-            {
-              "name": "Python: dev.py",
-              "type": "debugpy",
-              "request": "launch",
-              "program": "${workspaceFolder}/dev.py",
-              "cwd": "${workspaceFolder}",
-              "purpose": ["debug-test"],
-              "console": "integratedTerminal",
-              "justMyCode": false
-            }
-          ]
+          "configurations": []
         }
       }
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/python": {
-      "version": "3.11.6",
-      "enableShared": true
-    },
-    "ghcr.io/rocker-org/devcontainer-features/apt-packages": {
-      "packages": ["patchelf"]
+    "ghcr.io/devcontainers/features/go": {
+      "version": "1.22.5"
     }
   },
-  "image": "ubuntu:20.04",
+  "image": "ubuntu:latest",
   "postCreateCommand": ".devcontainer/post-create.sh"
 }
