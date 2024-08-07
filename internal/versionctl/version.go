@@ -1,9 +1,14 @@
-package version
+package versionctl
 
 import (
+	"cmp"
+	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 type VersionChange struct {
@@ -11,35 +16,57 @@ type VersionChange struct {
 	PrereleaseToken *string
 }
 
-func (change VersionChange) ToInt() int {
-	if change.Value == "major" {
+func (vc VersionChange) Int() int {
+	if vc.Value == "major" {
 		return 4
-	} else if change.Value == "minor" {
+	} else if vc.Value == "minor" {
 		return 3
-	} else if change.Value == "patch" {
+	} else if vc.Value == "patch" {
 		return 2
-	} else if change.Value == "prerelease" {
+	} else if vc.Value == "prerelease" {
 		return 1
 	} else {
 		return 0
 	}
 }
 
+func CompareVersionChange(lvc VersionChange, rvc VersionChange) int {
+	return cmp.Compare[int](lvc.Int(), rvc.Int())
+}
+
 type Prerelease struct {
 	Token string
-	Count uint64
+	Count int64
 }
 
 type Version struct {
-	Major      uint64
-	Minor      uint64
-	Patch      uint64
+	Major      int64
+	Minor      int64
+	Patch      int64
 	Prerelease *Prerelease
 	Metadata   *string
 }
 
-func (left Version) Compare(right Version) int8 {
+func CompareVersion(lv Version, rv Version) int {
+	lvPrerelease := 0
+	if lv.Prerelease == nil {
+		lvPrerelease = 1
+	}
+	lvValues := [4]int64{lv.Major, lv.Minor, lv.Patch, int64(lvPrerelease)}
 
+	rvPrerelease := 0
+	if rv.Prerelease == nil {
+		rvPrerelease = 1
+	}
+	rvValues := [4]int64{rv.Major, rv.Minor, rv.Patch, int64(rvPrerelease)}
+
+	for i := 0; i < 4; i++ {
+		diff := cmp.Compare(lvValues[i], rvValues[i])
+		if diff != 0 {
+			return diff
+		}
+	}
+	return 0
 }
 
 func (version Version) Bump(change VersionChange) (Version, error) {
@@ -105,7 +132,7 @@ var versionRegex *regexp.Regexp = regexp.MustCompile(
 		"(?:-(?P<prereleaseToken>.+)\\.(?P<prereleaseCount>\\d+))?" +
 		"(?:\\+(?P<metadata>.+))?")
 
-func New(value string) (Version, error) {
+func NewVersion(value string) (Version, error) {
 	subexpIndex := func(name string) (int, error) {
 		index := versionRegex.SubexpIndex(name)
 		if index == -1 {
@@ -123,7 +150,7 @@ func New(value string) (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	major, err := strconv.ParseUint(matches[majorIndex], 10, 64)
+	major, err := strconv.ParseInt(matches[majorIndex], 0, 0)
 	if err != nil {
 		return Version{}, fmt.Errorf("invalid major version value: %w", err)
 	}
@@ -132,7 +159,7 @@ func New(value string) (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	minor, err := strconv.ParseUint(matches[minorIndex], 10, 64)
+	minor, err := strconv.ParseInt(matches[minorIndex], 0, 0)
 	if err != nil {
 		return Version{}, fmt.Errorf("invalid minor version value: %w", err)
 	}
@@ -141,7 +168,7 @@ func New(value string) (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	patch, err := strconv.ParseUint(matches[patchIndex], 10, 64)
+	patch, err := strconv.ParseInt(matches[patchIndex], 0, 0)
 	if err != nil {
 		return Version{}, fmt.Errorf("invalid patch version value: %w", err)
 	}
@@ -158,7 +185,7 @@ func New(value string) (Version, error) {
 	var prerelease *Prerelease
 	if matches[prereleaseCountIndex] != "" && matches[prereleaseTokenIndex] != "" {
 		prereleaseToken := matches[prereleaseTokenIndex]
-		prereleaseCount, err := strconv.ParseUint(matches[prereleaseCountIndex], 10, 64)
+		prereleaseCount, err := strconv.ParseInt(matches[prereleaseCountIndex], 0, 0)
 		if err != nil {
 			return Version{}, fmt.Errorf("invalid prerelease value: %w", err)
 		}
@@ -189,17 +216,79 @@ func New(value string) (Version, error) {
 	}, nil
 }
 
-func (version Version) String(format string) (string, error) {
+func (v Version) Release() Version {
+	return Version{
+		Major: v.Major,
+		Minor: v.Minor,
+		Patch: v.Patch,
+	}
+}
+
+func (v Version) String(format string) (string, error) {
 	if format == "semver" {
-		value := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
-		if version.Prerelease != nil {
-			value = fmt.Sprintf("%s-%s.%d", value, version.Prerelease.Token, version.Prerelease.Count)
+		value := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+		if v.Prerelease != nil {
+			value = fmt.Sprintf("%s-%s.%d", value, v.Prerelease.Token, v.Prerelease.Count)
 		}
-		if version.Metadata != nil {
-			value = fmt.Sprintf("%s+%s", value, *version.Metadata)
+		if v.Metadata != nil {
+			value = fmt.Sprintf("%s+%s", value, *v.Metadata)
 		}
 		return value, nil
 	} else {
 		return "", fmt.Errorf("not implemented: %s", format)
 	}
+}
+
+func SetVersion(filePath string, version string) error {
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("could not open version file %s", err)
+	}
+
+	if stat.Name() == "pyproject.toml" {
+		fileBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		var data map[string]any
+		err = toml.Unmarshal(fileBytes, &data)
+		if err != nil {
+			return err
+		}
+		projectMap, ok := data["project"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("malformed pyproject.toml")
+		}
+		projectMap["version"] = version
+		fileBytes, err = toml.Marshal(data)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(filePath, fileBytes, 0644)
+		if err != nil {
+			return err
+		}
+	} else if stat.Name() == "package.json" {
+		fileBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		var data map[string]any
+		err = json.Unmarshal(fileBytes, &data)
+		if err != nil {
+			return err
+		}
+		data["version"] = version
+		fileBytes, err = json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(filePath, fileBytes, 0644)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("unsupported file: %s", filePath)
+	}
+	return nil
 }
