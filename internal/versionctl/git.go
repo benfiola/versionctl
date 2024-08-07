@@ -99,10 +99,11 @@ func (g Git) IterCommits(from string, cb func(Commit) error) error {
 		}
 		return nil
 	})
-
-	if err != nil {
+	_, isStopIter := err.(*StopIter)
+	if isStopIter && err != nil {
 		return err
 	}
+
 	return nil
 }
 
