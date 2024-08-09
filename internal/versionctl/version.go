@@ -16,6 +16,10 @@ type VersionChange struct {
 	PrereleaseToken *string
 }
 
+func (lvc VersionChange) Compare(rvc VersionChange) int {
+	return cmp.Compare(lvc.Int(), rvc.Int())
+}
+
 func (vc VersionChange) Int() int {
 	if vc.Value == "major" {
 		return 4
@@ -30,10 +34,6 @@ func (vc VersionChange) Int() int {
 	}
 }
 
-func CompareVersionChange(lvc VersionChange, rvc VersionChange) int {
-	return cmp.Compare[int](lvc.Int(), rvc.Int())
-}
-
 type Prerelease struct {
 	Token string
 	Count int64
@@ -45,28 +45,6 @@ type Version struct {
 	Patch      int64
 	Prerelease *Prerelease
 	Metadata   *string
-}
-
-func CompareVersion(lv Version, rv Version) int {
-	lvPrerelease := 0
-	if lv.Prerelease == nil {
-		lvPrerelease = 1
-	}
-	lvValues := [4]int64{lv.Major, lv.Minor, lv.Patch, int64(lvPrerelease)}
-
-	rvPrerelease := 0
-	if rv.Prerelease == nil {
-		rvPrerelease = 1
-	}
-	rvValues := [4]int64{rv.Major, rv.Minor, rv.Patch, int64(rvPrerelease)}
-
-	for i := 0; i < 4; i++ {
-		diff := cmp.Compare(lvValues[i], rvValues[i])
-		if diff != 0 {
-			return diff
-		}
-	}
-	return 0
 }
 
 func (version Version) Bump(change VersionChange) (Version, error) {
@@ -108,6 +86,28 @@ func (version Version) Bump(change VersionChange) (Version, error) {
 	}, nil
 }
 
+func (lv Version) Compare(rv Version) int {
+	lvPrerelease := 0
+	if lv.Prerelease == nil {
+		lvPrerelease = 1
+	}
+	lvValues := [4]int64{lv.Major, lv.Minor, lv.Patch, int64(lvPrerelease)}
+
+	rvPrerelease := 0
+	if rv.Prerelease == nil {
+		rvPrerelease = 1
+	}
+	rvValues := [4]int64{rv.Major, rv.Minor, rv.Patch, int64(rvPrerelease)}
+
+	for i := 0; i < 4; i++ {
+		diff := cmp.Compare(lvValues[i], rvValues[i])
+		if diff != 0 {
+			return diff
+		}
+	}
+	return 0
+}
+
 func (left Version) Diff(right Version) VersionChange {
 	value := "none"
 	if left.Major != right.Major {
@@ -122,6 +122,29 @@ func (left Version) Diff(right Version) VersionChange {
 	return VersionChange{
 		Value:           value,
 		PrereleaseToken: prereleaseToken,
+	}
+}
+
+func (v Version) Release() Version {
+	return Version{
+		Major: v.Major,
+		Minor: v.Minor,
+		Patch: v.Patch,
+	}
+}
+
+func (v Version) String(format string) (string, error) {
+	if format == "semver" {
+		value := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+		if v.Prerelease != nil {
+			value = fmt.Sprintf("%s-%s.%d", value, v.Prerelease.Token, v.Prerelease.Count)
+		}
+		if v.Metadata != nil {
+			value = fmt.Sprintf("%s+%s", value, *v.Metadata)
+		}
+		return value, nil
+	} else {
+		return "", fmt.Errorf("not implemented: %s", format)
 	}
 }
 
@@ -214,29 +237,6 @@ func NewVersion(value string) (Version, error) {
 		Prerelease: prerelease,
 		Metadata:   metadata,
 	}, nil
-}
-
-func (v Version) Release() Version {
-	return Version{
-		Major: v.Major,
-		Minor: v.Minor,
-		Patch: v.Patch,
-	}
-}
-
-func (v Version) String(format string) (string, error) {
-	if format == "semver" {
-		value := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
-		if v.Prerelease != nil {
-			value = fmt.Sprintf("%s-%s.%d", value, v.Prerelease.Token, v.Prerelease.Count)
-		}
-		if v.Metadata != nil {
-			value = fmt.Sprintf("%s+%s", value, *v.Metadata)
-		}
-		return value, nil
-	} else {
-		return "", fmt.Errorf("not implemented: %s", format)
-	}
 }
 
 func SetVersion(filePath string, version string) error {

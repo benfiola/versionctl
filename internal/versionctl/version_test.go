@@ -149,11 +149,11 @@ func TestNew(t *testing.T) {
 	})
 }
 
-func TestCompareVersion(t *testing.T) {
+func TestVersionCompare(t *testing.T) {
 	t.Run("major version greater than", func(t *testing.T) {
 		left := Version{Major: 1}
 		right := Version{}
-		if !(CompareVersion(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -161,7 +161,7 @@ func TestCompareVersion(t *testing.T) {
 	t.Run("minor version greater than", func(t *testing.T) {
 		left := Version{Minor: 1}
 		right := Version{}
-		if !(CompareVersion(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -169,7 +169,7 @@ func TestCompareVersion(t *testing.T) {
 	t.Run("patch version greater than", func(t *testing.T) {
 		left := Version{Patch: 1}
 		right := Version{}
-		if !(CompareVersion(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -177,7 +177,7 @@ func TestCompareVersion(t *testing.T) {
 	t.Run("equal", func(t *testing.T) {
 		left := Version{}
 		right := Version{}
-		if !(CompareVersion(left, right) == 0) {
+		if !(left.Compare(right) == 0) {
 			t.Errorf("comparse result invalid")
 		}
 	})
@@ -185,17 +185,17 @@ func TestCompareVersion(t *testing.T) {
 	t.Run("prerelease less than release", func(t *testing.T) {
 		left := Version{}
 		right := Version{Prerelease: &Prerelease{Token: "a", Count: 1}}
-		if !(CompareVersion(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
 }
 
-func TestCompareVersionChange(t *testing.T) {
+func TestVersionChangeCompare(t *testing.T) {
 	t.Run("major > none", func(t *testing.T) {
 		left := VersionChange{Value: "major"}
 		right := VersionChange{Value: "none"}
-		if !(CompareVersionChange(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -203,7 +203,7 @@ func TestCompareVersionChange(t *testing.T) {
 	t.Run("minor > none", func(t *testing.T) {
 		left := VersionChange{Value: "minor"}
 		right := VersionChange{Value: "none"}
-		if !(CompareVersionChange(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -211,7 +211,7 @@ func TestCompareVersionChange(t *testing.T) {
 	t.Run("patch > none", func(t *testing.T) {
 		left := VersionChange{Value: "patch"}
 		right := VersionChange{Value: "none"}
-		if !(CompareVersionChange(left, right) > 0) {
+		if !(left.Compare(right) > 0) {
 			t.Errorf("compare result invalid")
 		}
 	})
@@ -219,7 +219,7 @@ func TestCompareVersionChange(t *testing.T) {
 	t.Run("none == none", func(t *testing.T) {
 		left := VersionChange{Value: "none"}
 		right := VersionChange{Value: "none"}
-		if !(CompareVersionChange(left, right) == 0) {
+		if !(left.Compare(right) == 0) {
 			t.Errorf("compare result invalid")
 		}
 	})

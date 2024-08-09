@@ -67,7 +67,9 @@ func (a Analyzer) getRepoData() (Version, error) {
 		versions = append(versions, version)
 	}
 
-	slices.SortFunc(versions, CompareVersion)
+	slices.SortFunc(versions, func(a Version, b Version) int {
+		return a.Compare(b)
+	})
 	slices.Reverse(versions)
 
 	return versions[0], nil
@@ -88,7 +90,7 @@ func (a Analyzer) getAncestorData() (Version, VersionChange, error) {
 			return &StopIter{}
 		}
 		cChange := a.Parser.Parse(c.Message)
-		if CompareVersionChange(change, cChange) < 0 {
+		if change.Compare(cChange) < 0 {
 			change = cChange
 		}
 		return nil
@@ -154,7 +156,7 @@ func (a Analyzer) GetNextVersion() (Version, error) {
 	drift := repoVersion.Diff(ancestorRelease)
 	var version Version
 	if rule.PrereleaseToken != "" {
-		if CompareVersionChange(drift, change) < 0 {
+		if drift.Compare(change) < 0 {
 			version, err = repoVersion.Bump(change)
 			if err != nil {
 				return Version{}, err
@@ -173,7 +175,7 @@ func (a Analyzer) GetNextVersion() (Version, error) {
 				return Version{}, err
 			}
 		} else {
-			if CompareVersionChange(drift, change) < 0 {
+			if drift.Compare(change) < 0 {
 				version, err = repoVersion.Bump(change)
 				if err != nil {
 					return Version{}, err
