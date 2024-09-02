@@ -11,20 +11,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type TestRepo struct {
+	*git.Repository
+	t testing.TB
+}
+
 // Helper method to create a git repo.
-func createGitRepo(t testing.TB) (string, *git.Repository) {
+func createGitRepo(t testing.TB) (string, *TestRepo) {
 	t.Helper()
 	require := require.New(t)
 	d := t.TempDir()
 	r, err := git.PlainInit(d, false)
 	require.Nil(err)
-	return d, r
+	return d, &TestRepo{
+		Repository: r,
+		t:          t,
+	}
 }
 
 // Helper method to create a git commit with the provided message
-func createGitCommit(t testing.TB, r *git.Repository, message string) string {
-	t.Helper()
-	require := require.New(t)
+func (r *TestRepo) createGitCommit(message string) string {
+	r.t.Helper()
+	require := require.New(r.t)
 	wt, err := r.Worktree()
 	require.Nil(err)
 	h, err := wt.Commit(message, &git.CommitOptions{AllowEmptyCommits: true, Author: &object.Signature{Name: "author", Email: "email", When: time.Now()}})
@@ -33,9 +41,9 @@ func createGitCommit(t testing.TB, r *git.Repository, message string) string {
 }
 
 // Helper method to checkout a git branch (creates a branch if it does not exist)
-func checkoutGitBranch(t testing.TB, r *git.Repository, name string) {
-	t.Helper()
-	require := require.New(t)
+func (r *TestRepo) checkoutGitBranch(name string) {
+	r.t.Helper()
+	require := require.New(r.t)
 	_, err := r.ResolveRevision(plumbing.Revision(name))
 	c := err != nil
 	wt, err := r.Worktree()
@@ -45,9 +53,9 @@ func checkoutGitBranch(t testing.TB, r *git.Repository, name string) {
 }
 
 // Helper method to create a git tag at the current head.
-func createGitTag(t testing.TB, r *git.Repository, name string) {
-	t.Helper()
-	require := require.New(t)
+func (r *TestRepo) createGitTag(name string) {
+	r.t.Helper()
+	require := require.New(r.t)
 	h, err := r.Head()
 
 	r.CreateTag(name, h.Hash(), nil)
@@ -58,7 +66,9 @@ func TestNewGit(t *testing.T) {
 	t.Run("fails when not git repository", func(t *testing.T) {
 		require := require.New(t)
 
-		_, err := NewGit(t.TempDir())
+		_, err := NewGit(&GitOpts{
+			Path: t.TempDir(),
+		})
 		require.ErrorContains(err, "repository does not exist")
 	})
 
@@ -73,7 +83,7 @@ func TestNewGit(t *testing.T) {
 			os.Chdir(wd)
 		})
 
-		_, err = NewGit("")
+		_, err = NewGit(&GitOpts{})
 		require.Nil(err)
 	})
 
@@ -81,7 +91,9 @@ func TestNewGit(t *testing.T) {
 		require := require.New(t)
 		d, _ := createGitRepo(t)
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 
 		require.Nil(err)
 		require.NotNil(g)
@@ -92,9 +104,11 @@ func TestGetCurrentBranch(t *testing.T) {
 	t.Run("gets current branch", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "initial")
+		r.createGitCommit("initial")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		b, err := g.GetCurrentBranch()
@@ -108,9 +122,11 @@ func TestIterCommits(t *testing.T) {
 	t.Run("captures hash", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		h := createGitCommit(t, r, "message")
+		h := r.createGitCommit("message")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		commits := []GitCommit{}
@@ -126,9 +142,11 @@ func TestIterCommits(t *testing.T) {
 	t.Run("captures message", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "message")
+		r.createGitCommit("message")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		commits := []GitCommit{}
@@ -144,11 +162,13 @@ func TestIterCommits(t *testing.T) {
 	t.Run("captures tags", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "no tags")
-		createGitCommit(t, r, "tags")
-		createGitTag(t, r, "tag")
+		r.createGitCommit("no tags")
+		r.createGitCommit("tags")
+		r.createGitTag("tag")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		commits := []GitCommit{}
@@ -168,10 +188,12 @@ func TestIterCommits(t *testing.T) {
 	t.Run("iterates in descending order", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "a")
-		createGitCommit(t, r, "b")
+		r.createGitCommit("a")
+		r.createGitCommit("b")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		commits := []GitCommit{}
@@ -188,10 +210,12 @@ func TestIterCommits(t *testing.T) {
 	t.Run("stop iteration", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "a")
-		createGitCommit(t, r, "b")
+		r.createGitCommit("a")
+		r.createGitCommit("b")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		commits := []GitCommit{}
@@ -208,16 +232,18 @@ func TestListTags(t *testing.T) {
 	t.Run("list tags", func(t *testing.T) {
 		require := require.New(t)
 		d, r := createGitRepo(t)
-		createGitCommit(t, r, "initial")
+		r.createGitCommit("initial")
 
-		g, err := NewGit(d)
+		g, err := NewGit(&GitOpts{
+			Path: d,
+		})
 		require.Nil(err)
 
 		ts, err := g.ListTags()
 		require.Nil(err)
 		require.Equal(0, len(ts))
 
-		createGitTag(t, r, "test")
+		r.createGitTag("test")
 
 		ts, err = g.ListTags()
 		require.Nil(err)

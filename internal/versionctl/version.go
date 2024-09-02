@@ -21,16 +21,18 @@ type VersionChange struct {
 
 // Returns an 'int' value of a version change struct - useful during comparisons
 func (v VersionChange) int() int {
-	if v.Value == "major" {
+	switch v.Value {
+	case "major":
 		return 4
-	} else if v.Value == "minor" {
+	case "minor":
 		return 3
-	} else if v.Value == "patch" {
+	case "patch":
 		return 2
-	} else if v.Value == "prerelease" {
+	case "prerelease":
 		return 1
+	default:
+		return 0
 	}
-	return 0
 }
 
 // Compares the current [VersionChange] with another [VersionChange] .
@@ -54,114 +56,6 @@ type Version struct {
 	Patch      int
 	Prerelease Prerelease
 	Metadata   string
-}
-
-// Bumps the current [Version] by the amount specified via the [VersionChange] and
-// returns a new [Version].  If the [VersionChange] is a 'prerelease' change
-// and the prerelease token does not match that of the current [Version], the
-// prerelease token is changed and the prerelease count is reset.
-func (v Version) Bump(c VersionChange) Version {
-	// initialize new version with *only* release components
-	// (metadata is always cleared)
-	// (prerelease set *only* on prerelease version bump)
-	nv := Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch}
-	if c.Value == "major" {
-		nv.Major += 1
-		nv.Minor = 0
-		nv.Patch = 0
-	} else if c.Value == "minor" {
-		nv.Minor += 1
-		nv.Patch = 0
-	} else if c.Value == "patch" {
-		nv.Patch += 1
-	} else if c.Value == "prerelease" {
-		nv.Prerelease = Prerelease{Token: v.Prerelease.Token, Count: v.Prerelease.Count}
-		if nv.Prerelease.Token != c.PrereleaseToken {
-			// reset count if token doesn't match
-			nv.Prerelease.Token = c.PrereleaseToken
-			nv.Prerelease.Count = 0
-		}
-		nv.Prerelease.Count += 1
-	}
-	return nv
-}
-
-// Compares the current [Version] with another [Version].
-// Returns < 0 if the current [Version] is less than the other [Version].
-// Return 0 if the current [Version] is equal to the other [Version].
-// Returns > 0 if the current [Version] is greater than the other [Version].
-// Prerelease considered 'less than' release
-// Ignores metadata
-func (l Version) Compare(r Version) int {
-	lvs := []int{l.Major, l.Minor, l.Patch, 0}
-	if l.Prerelease == (Prerelease{}) {
-		lvs[3] = 1
-	}
-	rvs := []int{r.Major, r.Minor, r.Patch, 0}
-	if r.Prerelease == (Prerelease{}) {
-		rvs[3] = 1
-	}
-	for i := 0; i < 4; i++ {
-		d := cmp.Compare(lvs[i], rvs[i])
-		if d != 0 {
-			return d
-		}
-	}
-	return 0
-}
-
-// Compares the current [Version] with another [Version] and returns
-// the maximal difference between the versions by returning a [VersionChange]
-// object.
-func (l Version) Diff(r Version) VersionChange {
-	v := "none"
-	if l.Major != r.Major {
-		v = "major"
-	} else if l.Minor != r.Minor {
-		v = "minor"
-	} else if l.Patch != r.Patch {
-		v = "patch"
-	}
-	return VersionChange{Value: v}
-}
-
-// Returns a 'release' [Version] (i.e., prerelease and metadata components removed)
-// from the current [Version].
-func (v Version) Release() Version {
-	return Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch}
-}
-
-// Returns a string representation of [Version].
-// Defaults to 'semver' when format not specified, or format unrecognized.
-// docker: semver, replaces '+' with '-'
-// git: adds 'v' prefix to semver
-// node: semver, replaces '+' with '-'
-// semver: semantic version representation
-func (v Version) String(f string) string {
-	if f == "docker" {
-		sv := v.String("semver")
-		s := strings.Replace(sv, "+", "-", -1)
-		return s
-	} else if f == "git" {
-		sv := v.String("semver")
-		s := fmt.Sprintf("v%s", sv)
-		return s
-	} else if f == "node" {
-		sv := v.String("semver")
-		s := strings.Replace(sv, "+", "-", -1)
-		return s
-	} else if f == "semver" {
-		s := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
-		if v.Prerelease != (Prerelease{}) {
-			s = fmt.Sprintf("%s-%s.%d", s, v.Prerelease.Token, v.Prerelease.Count)
-		}
-		if v.Metadata != "" {
-			s = fmt.Sprintf("%s+%s", s, v.Metadata)
-		}
-		return s
-	} else {
-		return v.String("semver")
-	}
 }
 
 var versionRegex = regexp.MustCompile(
@@ -230,9 +124,114 @@ func NewVersion(v string) (Version, error) {
 	return Version{Major: ma, Minor: mi, Patch: p, Prerelease: pr, Metadata: me}, nil
 }
 
-// Writes a version string to a known file.  If the file is
-// unrecognized, an error is raised.  If any part of the file
-// operation fails, an error is raised.
+// Bumps the current [Version] by the amount specified via the [VersionChange] and returns a new [Version].
+// If the [VersionChange] is a 'prerelease' change and the prerelease token does not match that of the current [Version], the prerelease token is changed and the prerelease count is reset.
+func (v Version) Bump(c VersionChange) Version {
+	// initialize new version with *only* release components
+	// (metadata is always cleared)
+	// (prerelease set *only* on prerelease version bump)
+	nv := Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch}
+	switch c.Value {
+	case "major":
+		nv.Major += 1
+		nv.Minor = 0
+		nv.Patch = 0
+	case "minor":
+		nv.Minor += 1
+		nv.Patch = 0
+	case "patch":
+		nv.Patch += 1
+	case "prerelease":
+		nv.Prerelease = Prerelease{Token: v.Prerelease.Token, Count: v.Prerelease.Count}
+		if nv.Prerelease.Token != c.PrereleaseToken {
+			// reset count if token doesn't match
+			nv.Prerelease.Token = c.PrereleaseToken
+			nv.Prerelease.Count = 0
+		}
+		nv.Prerelease.Count += 1
+	}
+	return nv
+}
+
+// Compares the current [Version] with another [Version].
+// Returns < 0 if the current [Version] is less than the other [Version].
+// Return 0 if the current [Version] is equal to the other [Version].
+// Returns > 0 if the current [Version] is greater than the other [Version].
+// Prerelease considered 'less than' release
+// Ignores metadata
+func (l Version) Compare(r Version) int {
+	lvs := []int{l.Major, l.Minor, l.Patch, 0}
+	if l.Prerelease == (Prerelease{}) {
+		lvs[3] = 1
+	}
+	rvs := []int{r.Major, r.Minor, r.Patch, 0}
+	if r.Prerelease == (Prerelease{}) {
+		rvs[3] = 1
+	}
+	for i := 0; i < 4; i++ {
+		d := cmp.Compare(lvs[i], rvs[i])
+		if d != 0 {
+			return d
+		}
+	}
+	return 0
+}
+
+// Compares the current [Version] with another [Version] and returns the maximal difference between the versions by returning a [VersionChange] object.
+func (l Version) Diff(r Version) VersionChange {
+	v := "none"
+	if l.Major != r.Major {
+		v = "major"
+	} else if l.Minor != r.Minor {
+		v = "minor"
+	} else if l.Patch != r.Patch {
+		v = "patch"
+	}
+	return VersionChange{Value: v}
+}
+
+// Returns a 'release' [Version] (i.e., prerelease and metadata components removed) from the current [Version].
+func (v Version) Release() Version {
+	return Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch}
+}
+
+// Returns a string representation of [Version].
+// Defaults to 'semver' when format not specified, or format unrecognized.
+// docker: semver, replaces '+' with '-'
+// git: adds 'v' prefix to semver
+// node: semver, replaces '+' with '-'
+// semver: semantic version representation
+func (v Version) String(f string) string {
+	switch f {
+	case "docker":
+		sv := v.String("semver")
+		s := strings.Replace(sv, "+", "-", -1)
+		return s
+	case "git":
+		sv := v.String("semver")
+		s := fmt.Sprintf("v%s", sv)
+		return s
+	case "node":
+		sv := v.String("semver")
+		s := strings.Replace(sv, "+", "-", -1)
+		return s
+	case "semver":
+		s := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+		if v.Prerelease != (Prerelease{}) {
+			s = fmt.Sprintf("%s-%s.%d", s, v.Prerelease.Token, v.Prerelease.Count)
+		}
+		if v.Metadata != "" {
+			s = fmt.Sprintf("%s+%s", s, v.Metadata)
+		}
+		return s
+	default:
+		return v.String("semver")
+	}
+}
+
+// Writes a version string to a known file.
+// If the file is unrecognized, an error is raised.
+// If any part of the file operation fails, an error is raised.
 func SetVersion(v string, f string) error {
 	s, err := os.Stat(f)
 	if err != nil {

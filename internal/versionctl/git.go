@@ -1,6 +1,8 @@
 package versionctl
 
 import (
+	"io"
+	"log/slog"
 	"os"
 
 	"github.com/go-git/go-git/v5"
@@ -10,7 +12,41 @@ import (
 
 // A GitClient represents a git client.
 type Git struct {
-	repo *git.Repository
+	logger *slog.Logger
+	repo   *git.Repository
+}
+
+// Options to provide the git constructor [NewGit].
+type GitOpts struct {
+	Logger *slog.Logger
+	Path   string
+}
+
+// Constructs a [Git].
+// Accepts a path representing the local working copy.
+// If path is a zero value, uses the process' current working directory.
+func NewGit(o *GitOpts) (*Git, error) {
+	l := o.Logger
+	if l == nil {
+		l = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	// use current working directory if path is zero value
+	path := o.Path
+	var err error
+	if path == "" {
+		path, err = os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+	}
+	r, err := git.PlainOpen(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Git{
+		logger: l,
+		repo:   r,
+	}, nil
 }
 
 // Gets the current branch for the local working copy.
@@ -113,23 +149,4 @@ func (g Git) ListTags() ([]string, error) {
 		return []string{}, err
 	}
 	return t, nil
-}
-
-// Constructs a [Git].
-// Accepts a path representing the local working copy.
-// If path is a zero value, uses the process' current working directory.
-func NewGit(path string) (Git, error) {
-	// use current working directory if path is zero value
-	if path == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return Git{}, err
-		}
-		path = wd
-	}
-	r, err := git.PlainOpen(path)
-	if err != nil {
-		return Git{}, err
-	}
-	return Git{repo: r}, nil
 }

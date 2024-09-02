@@ -12,52 +12,55 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// Configures logging for the application.  Accepts a logging level
-// 'error' | 'warn' | 'info' | 'debug'
-func configureLogging(ls string) error {
-	if ls == "" {
-		ls = "error"
+type ContextOpts struct{}
+
+// Creates a root logger for the application.
+// Accepts a logging level 'error' | 'warn' | 'info' | 'debug'
+// Returns an error if the logging level is invalid
+func createLogger(lls string) (*slog.Logger, error) {
+	if lls == "" {
+		lls = "error"
 	}
-	var l slog.Level
-	if ls == "error" {
-		l = slog.LevelError
-	} else if ls == "warn" {
-		l = slog.LevelWarn
-	} else if ls == "info" {
-		l = slog.LevelInfo
-	} else if ls == "debug" {
-		l = slog.LevelDebug
-	} else {
-		return fmt.Errorf("unrecognized log level %s", ls)
+	var ll slog.Level
+	switch lls {
+	case "error":
+		ll = slog.LevelError
+	case "warn":
+		ll = slog.LevelWarn
+	case "info":
+		ll = slog.LevelInfo
+	case "debug":
+		ll = slog.LevelDebug
+	default:
+		return nil, fmt.Errorf("invalid log level %s", lls)
 	}
-	slog.SetLogLoggerLevel(l)
-	return nil
+	l := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: ll,
+	}))
+	return l, nil
 }
 
 // Loads a config from the provided path.  If the path is
 // a zero-value, load the default configuration embedded in the
 // binary.
-func loadConfig(p string) (versionctl.Config, error) {
+func loadConfig(p string) (*versionctl.Config, error) {
 	var b []byte
+	var err error
 	if p != "" {
-		_, err := os.Stat(p)
-		if err != nil {
-			return versionctl.Config{}, err
-		}
 		b, err = os.ReadFile(p)
 		if err != nil {
-			return versionctl.Config{}, err
+			return nil, err
 		}
 	} else {
 		b = versionctl.DefaultConfig
 	}
 
-	var d versionctl.Config
-	err := json.Unmarshal(b, &d)
+	cfg := &versionctl.Config{}
+	err = json.Unmarshal(b, cfg)
 	if err != nil {
-		return versionctl.Config{}, err
+		return nil, err
 	}
-	return d, nil
+	return cfg, nil
 }
 
 func main() {
@@ -68,11 +71,15 @@ func main() {
 			if err != nil {
 				return err
 			}
-			c.Context = context.WithValue(c.Context, "config", cfg)
-			err = configureLogging(c.String("log-level"))
+			l, err := createLogger(c.String("log-level"))
 			if err != nil {
 				return err
 			}
+			o := versionctl.Opts{
+				Config: cfg,
+				Logger: l,
+			}
+			c.Context = context.WithValue(c.Context, ContextOpts{}, &o)
 			return nil
 		},
 		Flags: []cli.Flag{
@@ -97,7 +104,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					fmt.Printf("%s", vn.String(f))
+					fmt.Fprintf(c.App.Writer, "%s", vn.String(f))
 					return nil
 				},
 			},
@@ -105,11 +112,11 @@ func main() {
 				Name:  "current",
 				Usage: "print the current version",
 				Action: func(c *cli.Context) error {
-					cfg, ok := c.Context.Value("config").(versionctl.Config)
+					o, ok := c.Context.Value(ContextOpts{}).(*versionctl.Opts)
 					if !ok {
-						return fmt.Errorf("context has invalid config")
+						return fmt.Errorf("context has invalid opts")
 					}
-					a, err := versionctl.NewAnalyzer(cfg)
+					a, err := versionctl.New(o)
 					if err != nil {
 						return err
 					}
@@ -117,7 +124,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					fmt.Printf("%s", v.String(""))
+					fmt.Fprintf(c.App.Writer, "%s", v.String(""))
 					return nil
 				},
 			},
@@ -125,11 +132,11 @@ func main() {
 				Name:  "next",
 				Usage: "print the next version",
 				Action: func(c *cli.Context) error {
-					cfg, ok := c.Context.Value("config").(versionctl.Config)
+					o, ok := c.Context.Value(ContextOpts{}).(*versionctl.Opts)
 					if !ok {
-						return fmt.Errorf("context has invalid config")
+						return fmt.Errorf("context has invalid opts")
 					}
-					a, err := versionctl.NewAnalyzer(cfg)
+					a, err := versionctl.New(o)
 					if err != nil {
 						return err
 					}

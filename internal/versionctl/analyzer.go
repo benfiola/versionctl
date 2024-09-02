@@ -2,6 +2,7 @@ package versionctl
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"regexp"
 	"slices"
@@ -41,20 +42,35 @@ func (r Rule) Match(b string) (RuleMatch, error) {
 	return RuleMatch{Matched: true, Data: d, Rule: r}, nil
 }
 
-// A Config represents the entire configuration object used to configure
-// versionctl behavior.
-type Config struct {
-	BreakingChangeTags []string
-	Rules              []Rule
-	Tags               map[string]string
+// An Analyzer uses local repository data alongside configured rules to manage software versions
+type Analyzer struct {
+	git    *Git
+	logger *slog.Logger
+	parser Parser
+	rules  []Rule
 }
 
-// An Analyzer uses local repository data alongside configured rules
-// to manage software versions
-type Analyzer struct {
-	Git    Git
+// Options to provide the analyzer constructor [NewAnalyzer]
+type AnalyzerOpts struct {
+	Git    *Git
+	Logger *slog.Logger
 	Parser Parser
 	Rules  []Rule
+}
+
+// Creates a new [Analyzer] from the provided [AnalyzerOpts].
+func NewAnalyzer(o *AnalyzerOpts) (*Analyzer, error) {
+	l := o.Logger
+	if l == nil {
+		l = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	a := &Analyzer{
+		git:    o.Git,
+		logger: l,
+		parser: o.Parser,
+		rules:  o.Rules,
+	}
+	return a, nil
 }
 
 // Parses a list of tags into [Version] structs, sorts them and returns them.
@@ -92,7 +108,7 @@ type repoData struct {
 // Analyzes local repository and returns a [repoData].
 func (a Analyzer) getRepoData() (repoData, error) {
 	v := Version{}
-	ts, err := a.Git.ListTags()
+	ts, err := a.git.ListTags()
 	if err != nil {
 		return repoData{}, err
 	}
@@ -114,7 +130,7 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 	v := Version{}
 	vc := VersionChange{Value: "none"}
 
-	err := a.Git.IterCommits("", func(c GitCommit) error {
+	err := a.git.IterCommits("", func(c GitCommit) error {
 		// collect *only* release versions attached to current commit
 		cvs := []Version{}
 		for _, cv := range a.getSortedVersionsFromTags(c.Tags) {
@@ -126,8 +142,8 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 
 		// only process commit if commit not part of release
 		if len(cvs) == 0 {
-			cvc := a.Parser.parse(c.Message)
-			slog.Debug(fmt.Sprintf("commit: %s (change: %s)", c.Hash, cvc.Value))
+			cvc := a.parser.Parse(c.Message)
+			a.logger.Debug(fmt.Sprintf("commit: %s (change: %s)", c.Hash, cvc.Value))
 			if vc.Compare(cvc) < 0 {
 				vc = cvc
 			}
@@ -136,7 +152,7 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 
 		// stop iteration - commit part of release
 		v = cvs[0]
-		slog.Debug(fmt.Sprintf("commit: %s (release: %s)", c.Hash, v.String("")))
+		a.logger.Debug(fmt.Sprintf("commit: %s (release: %s)", c.Hash, v.String("")))
 		return &StopIter{}
 	})
 	if err != nil {
@@ -148,7 +164,7 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 // Matches a branch name to a [Rule].
 // Returns an error if no [Rule] could be found.
 func (a Analyzer) findRule(bn string) (RuleMatch, error) {
-	for _, r := range a.Rules {
+	for _, r := range a.rules {
 		m, err := r.Match(bn)
 		if err != nil {
 			return RuleMatch{}, err
@@ -176,23 +192,23 @@ var nonAlphaNumericRegex = regexp.MustCompile("[^a-zA-Z0-9]+")
 
 // Gets the next [Version] for the local repository.
 func (a Analyzer) GetNextVersion() (Version, error) {
-	b, err := a.Git.GetCurrentBranch()
+	b, err := a.git.GetCurrentBranch()
 	if err != nil {
 		return Version{}, err
 	}
-	slog.Info(fmt.Sprintf("branch: %s", b))
+	a.logger.Info(fmt.Sprintf("branch: %s", b))
 	rm, err := a.findRule(b)
 	r := rm.Rule
 	if err != nil {
 		return Version{}, err
 	}
-	slog.Info(fmt.Sprintf("rule: %s", r.Branch))
+	a.logger.Info(fmt.Sprintf("rule: %s", r.Branch))
 	rd, err := a.getRepoData()
 	if err != nil {
 		return Version{}, err
 	}
 
-	slog.Info(fmt.Sprintf("repo version: %s", rd.Version.String("")))
+	a.logger.Info(fmt.Sprintf("repo version: %s", rd.Version.String("")))
 	ad, err := a.getAncestorData()
 	if err != nil {
 		return Version{}, err
@@ -200,11 +216,11 @@ func (a Analyzer) GetNextVersion() (Version, error) {
 	if ad.VersionChange.Value == "none" {
 		return Version{}, fmt.Errorf("version unchanged")
 	}
-	slog.Info(fmt.Sprintf("ancestor version: %s", ad.Version.String("")))
-	slog.Info(fmt.Sprintf("ancestor change: %s", ad.VersionChange.Value))
+	a.logger.Info(fmt.Sprintf("ancestor version: %s", ad.Version.String("")))
+	a.logger.Info(fmt.Sprintf("ancestor change: %s", ad.VersionChange.Value))
 
 	d := ad.Version.Diff(rd.Version)
-	slog.Info(fmt.Sprintf("repo + ancestor version diff: %s", d.Value))
+	a.logger.Info(fmt.Sprintf("repo + ancestor version diff: %s", d.Value))
 
 	var version Version
 	if r.PrereleaseToken != "" {
@@ -259,15 +275,4 @@ func (a Analyzer) injectData(d map[string]string, v string) string {
 		v = strings.ReplaceAll(v, s, value)
 	}
 	return v
-}
-
-// Creates a new [Analyzer] from the provided [Config].
-func NewAnalyzer(c Config) (Analyzer, error) {
-	p := Parser{BreakingChangeTags: c.BreakingChangeTags, Tags: c.Tags}
-	g, err := NewGit("")
-	if err != nil {
-		return Analyzer{}, err
-	}
-	a := Analyzer{Git: g, Parser: p, Rules: c.Rules}
-	return a, nil
 }

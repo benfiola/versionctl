@@ -6,37 +6,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParse(t *testing.T) {
+func TestDefaultParser(t *testing.T) {
 	t.Run("no tag match", func(t *testing.T) {
 		require := require.New(t)
-		p := Parser{}
+		p, err := NewParser("default", &ParserOpts{})
+		require.Nil(err)
 
-		vc := p.parse("")
+		vc := p.Parse("")
 
 		require.Equal("none", vc.Value)
 	})
 
 	t.Run("tag match", func(t *testing.T) {
 		require := require.New(t)
-		p := Parser{Tags: map[string]string{
-			"tag:": "minor",
-		}}
+		p, err := NewParser("default", &ParserOpts{
+			Tags: map[string]string{
+				"tag:": "minor",
+			},
+		})
+		require.Nil(err)
 
-		vc := p.parse("tag: test")
+		vc := p.Parse("tag: test")
 
 		require.Equal("minor", vc.Value)
 	})
 
 	t.Run("breaking change match", func(t *testing.T) {
 		require := require.New(t)
-		p := Parser{
+		p, err := NewParser("default", &ParserOpts{
 			BreakingChangeTags: []string{"bct:"},
 			Tags: map[string]string{
 				"tag:": "minor",
 			},
-		}
+		})
+		require.Nil(err)
 
-		vc := p.parse("tag: test\nbct: other")
+		vc := p.Parse("tag: test\nbct: other")
 
 		require.Equal("major", vc.Value)
 	})
