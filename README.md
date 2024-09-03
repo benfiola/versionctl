@@ -67,8 +67,8 @@ $ versionctl convert 0.1.0-rc.1+meta node
 
 # write a version to a file
 $ versionctl set 0.1.0 pyproject.toml # writes project.version field
-$ version set 0.1.0 package.json # writes version field
-echo "$(version next)" > version.txt # writes a version to a text file
+$ versionctl set 0.1.0 package.json # writes version field
+echo "$(versionctl next)" > version.txt # writes a version to a text file
 
 # print versionctl tool version
 $ versionctl version
