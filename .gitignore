@@ -1,2 +1,5 @@
+# ignore local dev files
 /dev/dev.go
 
+# ignore IDE files
+**/.vscode

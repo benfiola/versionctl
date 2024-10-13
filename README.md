@@ -107,8 +107,19 @@ Describes a version bump level. Must be one of: `["major", "minor", "patch"]`.
 
 I personally use [vscode](https://code.visualstudio.com/) as an IDE. For a consistent development experience, this project is also configured to utilize [devcontainers](https://containers.dev/). If you're using both - and you have the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) installed - you can follow the [introductory docs](https://code.visualstudio.com/docs/devcontainers/tutorial) to quickly get started.
 
-### Creating a launch script
+NOTE: Helper scripts are written under the assumption that they're being executed within a dev container.
 
-Copy the [./dev/dev.go.template](./dev/dev.go.template) script to `./dev/dev.go`, then run it to start both the external-dns controller and this provider. `./dev/dev.go` is ignored by git and can be modified as needed to help facilitate local development.
+### Run unit tests
+
+You can run unit tests to confirm _versionctl_ functions as expected:
+
+```shell
+cd /workspaces/versionctl
+make unit-test
+```
+
+### Creating a debug script
+
+Copy the [./dev/dev.go.template](./dev/dev.go.template) script to `./dev/dev.go`, then run it to start the provider. `./dev/dev.go` is ignored by git and can be modified as needed to help facilitate local development.
 
 Additionally, the devcontainer is configured with a vscode launch configuration that points to `./dev/dev.go`. You should be able to launch (and attach a debugger to) the webhook via this vscode launch configuration.
