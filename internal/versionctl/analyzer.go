@@ -132,13 +132,7 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 
 	err := a.git.IterCommits("", func(c GitCommit) error {
 		// collect *only* release versions attached to current commit
-		cvs := []Version{}
-		for _, cv := range a.getSortedVersionsFromTags(c.Tags) {
-			if cv.Prerelease != (Prerelease{}) {
-				continue
-			}
-			cvs = append(cvs, cv)
-		}
+		cvs := a.getSortedVersionsFromTags(c.Tags)
 
 		// only process commit if commit not part of release
 		if len(cvs) == 0 {
@@ -152,7 +146,7 @@ func (a Analyzer) getAncestorData() (ancestorData, error) {
 
 		// stop iteration - commit part of release
 		v = cvs[0]
-		a.logger.Debug(fmt.Sprintf("commit: %s (release: %s)", c.Hash, v.String("")))
+		a.logger.Debug(fmt.Sprintf("commit: %s (version: %s)", c.Hash, v.String("")))
 		return &StopIter{}
 	})
 	if err != nil {
