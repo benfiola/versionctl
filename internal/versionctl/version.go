@@ -168,13 +168,17 @@ func (l Version) Compare(r Version) int {
 	if r.Prerelease == (Prerelease{}) {
 		rvs[3] = 1
 	}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < len(lvs); i++ {
 		d := cmp.Compare(lvs[i], rvs[i])
 		if d != 0 {
 			return d
 		}
 	}
-	return 0
+	d := cmp.Compare(l.Prerelease.Token, r.Prerelease.Token)
+	if d != 0 {
+		return d
+	}
+	return cmp.Compare(l.Prerelease.Count, r.Prerelease.Count)
 }
 
 // Compares the current [Version] with another [Version] and returns the maximal difference between the versions by returning a [VersionChange] object.
