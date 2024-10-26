@@ -106,7 +106,8 @@ type repoData struct {
 }
 
 // Analyzes local repository and returns a [repoData].
-func (a Analyzer) getRepoData() (repoData, error) {
+// In the event of multiple versions with the same release, will favor the provided prerelease token.
+func (a Analyzer) getRepoData(prereleaseToken string) (repoData, error) {
 	v := Version{}
 	ts, err := a.git.ListTags()
 	if err != nil {
@@ -115,6 +116,17 @@ func (a Analyzer) getRepoData() (repoData, error) {
 	vs := a.getSortedVersionsFromTags(ts)
 	if len(vs) > 0 {
 		v = vs[0]
+	}
+	if v.Prerelease.Token != "" && prereleaseToken != "" {
+		for _, rv := range vs {
+			if v.Release() != rv.Release() {
+				break
+			}
+			if rv.Prerelease.Token == prereleaseToken {
+				v = rv
+				break
+			}
+		}
 	}
 	return repoData{Version: v}, nil
 }
@@ -179,7 +191,7 @@ func (a Analyzer) findRule(bn string) (RuleMatch, error) {
 
 // Gets the current [Version] for the local repository.
 func (a Analyzer) GetCurrentVersion() (Version, error) {
-	rd, err := a.getRepoData()
+	rd, err := a.getRepoData("")
 	if err != nil {
 		return Version{}, err
 	}
@@ -203,7 +215,7 @@ func (a Analyzer) GetNextVersion() (Version, error) {
 		return Version{}, err
 	}
 	a.logger.Info(fmt.Sprintf("rule: %s", r.Branch))
-	rd, err := a.getRepoData()
+	rd, err := a.getRepoData(r.PrereleaseToken)
 	if err != nil {
 		return Version{}, err
 	}

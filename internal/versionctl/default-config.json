@@ -6,7 +6,7 @@
     {
       "branch": "^(?P<branch>.*)$",
       "prereleaseToken": "alpha",
-      "buildMetadata": "{branch}"
+      "metadata": "{branch}"
     }
   ],
   "tags": {
